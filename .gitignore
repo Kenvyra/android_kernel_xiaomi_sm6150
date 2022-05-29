@@ -89,7 +89,6 @@ arch/*/include/generated
 patches-*
 
 # quilt's files
-patches
 series
 
 # cscope files
