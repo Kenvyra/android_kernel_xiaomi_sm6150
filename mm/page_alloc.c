@@ -70,6 +70,7 @@
 #include <linux/nmi.h>
 #include <linux/khugepaged.h>
 #include <linux/psi.h>
+#include <linux/random.h>
 
 #include <asm/sections.h>
 #include <asm/tlbflush.h>
@@ -103,6 +104,15 @@ int _node_numa_mem_[MAX_NUMNODES];
 /* work_structs for global per-cpu drains */
 DEFINE_MUTEX(pcpu_drain_mutex);
 DEFINE_PER_CPU(struct work_struct, pcpu_drain);
+
+bool __meminitdata extra_latent_entropy;
+
+static int __init setup_extra_latent_entropy(char *str)
+{
+	extra_latent_entropy = true;
+	return 0;
+}
+early_param("extra_latent_entropy", setup_extra_latent_entropy);
 
 #ifdef CONFIG_GCC_PLUGIN_LATENT_ENTROPY
 volatile unsigned long latent_entropy __latent_entropy;
@@ -1138,6 +1148,13 @@ static __always_inline bool free_pages_prepare(struct page *page,
 		debug_check_no_obj_freed(page_address(page),
 					   PAGE_SIZE << order);
 	}
+
+	if (IS_ENABLED(CONFIG_PAGE_SANITIZE)) {
+		int i;
+		for (i = 0; i < (1 << order); i++)
+			clear_highpage(page + i);
+	}
+
 	arch_free_page(page, order);
 	if (want_init_on_free())
 		kernel_init_free_pages(page, 1 << order);
@@ -1361,6 +1378,21 @@ static void __free_pages_boot_core(struct page *page, unsigned int order)
 	}
 	__ClearPageReserved(p);
 	set_page_count(p, 0);
+
+	if (extra_latent_entropy && !PageHighMem(page) && page_to_pfn(page) < 0x100000) {
+		unsigned long hash = 0;
+		size_t index, end = PAGE_SIZE * nr_pages / sizeof hash;
+		const unsigned long *data = lowmem_page_address(page);
+
+		for (index = 0; index < end; index++)
+			hash ^= hash + data[index];
+#ifdef CONFIG_GCC_PLUGIN_LATENT_ENTROPY
+		latent_entropy ^= hash;
+		add_device_randomness((const void *)&latent_entropy, sizeof(latent_entropy));
+#else
+		add_device_randomness((const void *)&hash, sizeof(hash));
+#endif
+	}
 
 	page_zone(page)->managed_pages += nr_pages;
 	set_page_refcounted(page);
@@ -1803,8 +1835,9 @@ static inline int check_new_page(struct page *page)
 
 static inline bool free_pages_prezeroed(void)
 {
-	return (IS_ENABLED(CONFIG_PAGE_POISONING_ZERO) &&
-		page_poisoning_enabled()) || want_init_on_free();
+	return IS_ENABLED(CONFIG_PAGE_SANITIZE) ||
+		(IS_ENABLED(CONFIG_PAGE_POISONING_ZERO) && page_poisoning_enabled()) ||
+		want_init_on_free();
 }
 
 #ifdef CONFIG_DEBUG_VM
@@ -1858,6 +1891,12 @@ static void prep_new_page(struct page *page, unsigned int order, gfp_t gfp_flags
 							unsigned int alloc_flags)
 {
 	post_alloc_hook(page, order, gfp_flags);
+
+	if (IS_ENABLED(CONFIG_PAGE_SANITIZE_VERIFY)) {
+		int i;
+		for (i = 0; i < (1 << order); i++)
+			verify_zero_highpage(page + i);
+	}
 
 	if (!free_pages_prezeroed() && want_init_on_alloc(gfp_flags))
 		kernel_init_free_pages(page, 1 << order);

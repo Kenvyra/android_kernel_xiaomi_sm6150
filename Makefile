@@ -2,7 +2,7 @@
 VERSION = 4
 PATCHLEVEL = 14
 SUBLEVEL = 320
-EXTRAVERSION =
+EXTRAVERSION = -hardened1
 NAME = Petit Gorille
 
 # *DOCUMENTATION*
@@ -787,6 +787,9 @@ endif
 KBUILD_CFLAGS += $(stackp-flag)
 
 ifeq ($(cc-name),clang)
+ifdef CONFIG_LOCAL_INIT
+KBUILD_CFLAGS   += -fsanitize=local-init
+endif
 KBUILD_CFLAGS += $(call cc-disable-warning, format-invalid-specifier)
 KBUILD_CFLAGS += $(call cc-disable-warning, gnu)
 KBUILD_CFLAGS += $(call cc-disable-warning, duplicate-decl-specifier)

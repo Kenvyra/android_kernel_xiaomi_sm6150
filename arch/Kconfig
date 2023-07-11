@@ -456,6 +456,11 @@ config GCC_PLUGIN_LATENT_ENTROPY
 	  is some slowdown of the boot process (about 0.5%) and fork and
 	  irq processing.
 
+	  When extra_latent_entropy is passed on the kernel command line,
+	  entropy will be extracted from up to the first 4GB of RAM while the
+	  runtime memory allocator is being initialized.  This costs even more
+	  slowdown of the boot process.
+
 	  Note that entropy extracted this way is not cryptographically
 	  secure!
 
@@ -549,7 +554,7 @@ config CC_STACKPROTECTOR
 choice
 	prompt "Stack Protector buffer overflow detection"
 	depends on HAVE_CC_STACKPROTECTOR
-	default CC_STACKPROTECTOR_NONE
+	default CC_STACKPROTECTOR_STRONG
 	help
 	  This option turns on the "stack-protector" GCC feature. This
 	  feature puts, at the beginning of functions, a canary value on
@@ -875,7 +880,7 @@ config ARCH_MMAP_RND_BITS
 	int "Number of bits to use for ASLR of mmap base address" if EXPERT
 	range ARCH_MMAP_RND_BITS_MIN ARCH_MMAP_RND_BITS_MAX
 	default ARCH_MMAP_RND_BITS_DEFAULT if ARCH_MMAP_RND_BITS_DEFAULT
-	default ARCH_MMAP_RND_BITS_MIN
+	default ARCH_MMAP_RND_BITS_MAX
 	depends on HAVE_ARCH_MMAP_RND_BITS
 	help
 	  This value can be used to select the number of bits to use to
@@ -909,7 +914,7 @@ config ARCH_MMAP_RND_COMPAT_BITS
 	int "Number of bits to use for ASLR of mmap base address for compatible applications" if EXPERT
 	range ARCH_MMAP_RND_COMPAT_BITS_MIN ARCH_MMAP_RND_COMPAT_BITS_MAX
 	default ARCH_MMAP_RND_COMPAT_BITS_DEFAULT if ARCH_MMAP_RND_COMPAT_BITS_DEFAULT
-	default ARCH_MMAP_RND_COMPAT_BITS_MIN
+	default ARCH_MMAP_RND_COMPAT_BITS_MAX
 	depends on HAVE_ARCH_MMAP_RND_COMPAT_BITS
 	help
 	  This value can be used to select the number of bits to use to
@@ -1092,6 +1097,7 @@ config ARCH_HAS_REFCOUNT
 
 config REFCOUNT_FULL
 	bool "Perform full reference count validation at the expense of speed"
+	default y
 	help
 	  Enabling this switches the refcounting infrastructure from a fast
 	  unchecked atomic_t implementation to a fully state checked
